@@ -153,7 +153,7 @@
   <!-- ══════════════════════════════════════════════════
        장비 관리 모달 (전체화면 오버레이)
   ══════════════════════════════════════════════════ -->
-  <div id="modal-devices" class="hidden fixed inset-0 bg-black/50 z-[100] flex flex-col">
+  <div id="modal-devices" class="hidden fixed inset-0 bg-black/50 z-[9999] flex flex-col">
     <div class="flex flex-col flex-1 bg-surface-container-lowest overflow-hidden m-4 rounded-xl overlay-shadow">
 
       <!-- 모달 헤더 -->
@@ -470,7 +470,26 @@
             <span id="summary-normal" class="font-mono font-bold">0 개</span>
           </div>
         </div>
-        <div class="mt-6 text-xs text-outline text-right">
+
+        <!-- 장비 DB 매칭 현황 -->
+        <div id="match-summary" class="mt-4 pt-3 border-t border-outline-variant/20 text-sm space-y-1">
+          <div class="flex justify-between items-center py-0.5">
+            <span class="text-on-surface-variant flex items-center gap-1">
+              <span class="material-symbols-outlined text-status-normal" style="font-size:15px">link</span>
+              DB 매칭됨
+            </span>
+            <span id="summary-matched" class="font-mono font-bold text-on-surface">0 개</span>
+          </div>
+          <div id="unmatched-row" class="flex justify-between items-center py-0.5 hidden">
+            <span class="text-amber-600 flex items-center gap-1">
+              <span class="material-symbols-outlined" style="font-size:15px">link_off</span>
+              미매칭 (지도 제외)
+            </span>
+            <span id="summary-unmatched" class="font-mono font-bold text-amber-600">0 개</span>
+          </div>
+        </div>
+
+        <div class="mt-4 text-xs text-outline text-right">
           마지막 업데이트: <span id="last-update" class="font-mono">-</span>
         </div>
       </section>
@@ -620,8 +639,11 @@ S-008,강남 1구간,2026-06-08 10:10,47.8,37.4980,127.0276`;
 const state = {
   sensors:          {},   // 온도 데이터 있는 센서  { id: sensorObj }
   deviceDB:         [],   // 등록된 장비 목록 (DB에서 로드)
-  deviceDBMap:      {},   // { id: device } 빠른 조회용
+  deviceDBMap:      {},   // { 장비이름: device } 빠른 조회용
+  deviceDBByCtn:    {},   // { CTN: device }
+  deviceDBByEntity: {},   // { EntityID: device }
   deviceDBLoaded:   false,
+  unmatchedCount:   0,    // 등록 DB와 매칭 안 된 센서 수
   thresholdWarning: 40,
   thresholdDanger:  50,
   selectedSensorId: null,
@@ -632,20 +654,29 @@ const state = {
 // 온도 데이터 컬럼 매핑
 // ════════════════════════════════════════════════════
 const TEMP_ALIASES = {
-  id:   ['센서id','sensor_id','sensorid','id','센서번호','장비 이름','장비이름'],
-  name: ['센서명','sensor_name','이름','name','구간명'],
-  time: ['측정시각','측정 시각','timestamp','datetime','time','시각','날짜'],
-  temp: ['온도','temperature','temp','기온','측정온도','온도값'],
-  lat:  ['위도','latitude','lat'],
-  lng:  ['경도','longitude','lng','lon'],
+  id:       ['센서id','sensor_id','sensorid','id','센서번호','장비 이름','장비이름','장비명'],
+  name:     ['센서명','sensor_name','이름','name','구간명'],
+  // 계측일시 우선, 없으면 측정시각/통신일시
+  time:     ['계측일시','측정시각','측정 시각','timestamp','datetime','time','시각','날짜','통신일시'],
+  // 단말온도 우선 (지열온도는 전부 0이므로 제외). 일반 '온도' 헤더도 지원
+  temp:     ['단말온도(℃)','단말온도(°c)','단말온도','terminaltemp','온도','temperature','temp','기온','측정온도','온도값'],
+  lat:      ['위도','latitude','lat'],
+  lng:      ['경도','longitude','lng','lon'],
+  // 보조 매칭 키 (devList DB와 좌표 매칭용)
+  ctn:      ['식별번호(ctn)','식별번호','ctn'],
+  entityId: ['entity id','entityid'],
 };
 
 function mapTempColumns(headers) {
   const low = headers.map(h => String(h).toLowerCase().replace(/\s+/g,''));
   const m = {};
-  for (const [f, aliases] of Object.entries(TEMP_ALIASES))
-    for (let i = 0; i < low.length; i++)
-      if (aliases.includes(low[i])) { m[f] = i; break; }
+  // alias 배열의 우선순위 순서대로 매칭 (예: 계측일시 > 통신일시, 단말온도 > 일반 온도)
+  for (const [f, aliases] of Object.entries(TEMP_ALIASES)) {
+    for (const a of aliases) {
+      const idx = low.indexOf(a);
+      if (idx !== -1) { m[f] = idx; break; }
+    }
+  }
   return m;
 }
 
@@ -726,11 +757,25 @@ async function clearDevicesOnServer() {
 
 function applyDeviceDB(db) {
   state.deviceDB    = db.devices || [];
-  state.deviceDBMap = {};
-  for (const d of state.deviceDB) state.deviceDBMap[d.id] = d;
+  state.deviceDBMap = {};   // 장비 이름(id) → device
+  state.deviceDBByCtn    = {};   // 식별번호(CTN) → device
+  state.deviceDBByEntity = {};   // Entity ID → device
+  for (const d of state.deviceDB) {
+    if (d.id)       state.deviceDBMap[String(d.id).trim()]            = d;
+    if (d.ctn)      state.deviceDBByCtn[String(d.ctn).trim()]         = d;
+    if (d.entityId) state.deviceDBByEntity[String(d.entityId).trim()] = d;
+  }
   state.deviceDBLoaded = true;
   updateSidebarDBStatus(db);
   updateMap();
+}
+
+// 온도 데이터 행을 등록 장비 DB와 매칭 (장비이름 → CTN → Entity ID 순)
+function matchDevice(sid, ctn, entityId) {
+  return state.deviceDBMap[sid]
+      || (ctn      ? state.deviceDBByCtn[String(ctn).trim()] : null)
+      || (entityId ? state.deviceDBByEntity[String(entityId).trim()] : null)
+      || null;
 }
 
 function updateServerStatus(online, db) {
@@ -786,40 +831,56 @@ function processData(rows) {
     const temp = parseFloat(row[colMap.temp]);
     if (!sid || isNaN(temp)) continue;
 
-    const time = String(row[colMap.time] || '').trim();
-    const name = colMap.name !== undefined ? String(row[colMap.name] || sid).trim() : sid;
+    const time     = String(row[colMap.time] || '').trim();
+    const name     = colMap.name     !== undefined ? String(row[colMap.name] || sid).trim() : sid;
+    const ctn      = colMap.ctn      !== undefined ? String(row[colMap.ctn]      || '').trim() : '';
+    const entityId = colMap.entityId !== undefined ? String(row[colMap.entityId] || '').trim() : '';
 
-    // 좌표: CSV 우선, 없으면 deviceDB에서 가져옴
+    // 등록 장비 DB와 매칭 (장비이름 → CTN → Entity ID)
+    const dev = matchDevice(sid, ctn, entityId);
+
+    // 좌표: CSV에 있으면 우선, 없으면 매칭된 장비 DB에서 가져옴
     let lat = colMap.lat !== undefined ? parseFloat(row[colMap.lat]) : NaN;
     let lng = colMap.lng !== undefined ? parseFloat(row[colMap.lng]) : NaN;
-    if (isNaN(lat) || isNaN(lng)) {
-      const dev = state.deviceDBMap[sid];
-      if (dev) { lat = dev.lat; lng = dev.lng; }
-    }
-    if (isNaN(lat) || isNaN(lng)) continue;
+    if ((isNaN(lat) || isNaN(lng)) && dev) { lat = dev.lat; lng = dev.lng; }
+    const hasCoord = !isNaN(lat) && !isNaN(lng);
 
     if (!sensors[sid]) {
-      const dev = state.deviceDBMap[sid];
       sensors[sid] = {
-        id: sid,
-        name: dev ? (dev.address || name) : name,
-        org:  dev?.org || '',
-        lat, lng,
-        history: [],
+        id:       sid,
+        name:     dev ? (dev.address || name) : name,
+        org:      dev?.org || '',
+        matched:  !!dev,                 // 등록 DB 매칭 여부
+        lat:      hasCoord ? lat : null,
+        lng:      hasCoord ? lng : null,
+        hasCoord,
+        history:  [],
       };
     }
     sensors[sid].history.push({ time, temp });
   }
 
+  let unmatched = 0;
   for (const s of Object.values(sensors)) {
     s.history.sort((a, b) => (a.time > b.time ? 1 : -1));
     const last = s.history[s.history.length - 1];
     s.latestTemp = last.temp;
     s.latestTime = last.time;
     s.status = getStatus(s.latestTemp);
+    if (!s.matched) unmatched++;
   }
 
   state.sensors = sensors;
+  state.unmatchedCount = unmatched;
+
+  const total = Object.keys(sensors).length;
+  if (total === 0) {
+    alert('유효한 온도 측정 데이터를 찾지 못했습니다.\n\n인식된 헤더: ' + headers.join(', '));
+    return false;
+  }
+  if (unmatched > 0) {
+    console.warn(`[매칭] ${total}개 센서 중 ${unmatched}개가 등록 장비 DB와 매칭되지 않았습니다. (지도 미표시 가능)`);
+  }
   return true;
 }
 
@@ -896,8 +957,9 @@ function updateMap() {
     mapMarkers[d.id] = marker;
   }
 
-  // 2) 온도 데이터 있는 센서 - 색상 마커
+  // 2) 온도 데이터 있는 센서 - 색상 마커 (좌표 있는 것만 지도 표시)
   for (const s of Object.values(state.sensors)) {
+    if (!s.hasCoord) continue;
     const isSelected = s.id === state.selectedSensorId;
     const marker = L.marker([s.lat, s.lng], { icon: makeIcon(s.status, isSelected) }).addTo(leafletMap);
     marker.bindPopup(popupHtml(s.id, s.name, s.latestTemp, s.latestTime, s.status, s.org));
@@ -1019,6 +1081,14 @@ function updateSummary() {
   document.getElementById('summary-warning').textContent = `${all.filter(s=>s.status==='warning').length} 개`;
   document.getElementById('summary-danger').textContent  = `${all.filter(s=>s.status==='danger').length} 개`;
   document.getElementById('summary-normal').textContent  = `${all.filter(s=>s.status==='normal').length} 개`;
+
+  // 장비 DB 매칭 현황
+  const matched   = all.filter(s => s.matched).length;
+  const unmatched = all.length - matched;
+  document.getElementById('summary-matched').textContent   = `${matched} 개`;
+  document.getElementById('summary-unmatched').textContent = `${unmatched} 개`;
+  document.getElementById('unmatched-row').classList.toggle('hidden', unmatched === 0);
+
   const now = new Date(), p = n => String(n).padStart(2,'0');
   document.getElementById('last-update').textContent =
     `${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
