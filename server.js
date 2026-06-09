@@ -7,10 +7,25 @@
 const http = require('http');
 const fs   = require('fs');
 const path = require('path');
+const { runAnalysis } = require('./api/_analyze-core');
 
 const PORT    = 3000;
 const DIR     = __dirname;
 const DB_FILE = path.join(DIR, 'devices_db.json');
+
+// ── .env 로더 (의존성 없이 KEY=VALUE 파싱) ────────────
+function loadEnv() {
+  try {
+    const txt = fs.readFileSync(path.join(DIR, '.env'), 'utf8');
+    for (const line of txt.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (m && !(m[1] in process.env)) {
+        process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      }
+    }
+  } catch { /* .env 없으면 무시 */ }
+}
+loadEnv();
 
 // ── MIME ──────────────────────────────────────────────
 const MIME = {
@@ -83,6 +98,22 @@ const server = http.createServer(async (req, res) => {
       writeDB(db);
       console.log(`[DB] ${devices.length}개 장비 저장 → ${DB_FILE}`);
       sendJSON(res, 200, { success: true, count: devices.length });
+      return;
+    }
+
+    // ── API: AI 분석 (브리핑 / 급변 감지 / 우선순위) ────
+    if (pathname === '/api/analyze' && req.method === 'POST') {
+      try {
+        const payload = JSON.parse(await readBody(req));
+        const result = await runAnalysis(payload, {
+          apiKey: process.env.OPENAI_API_KEY,
+          model:  process.env.OPENAI_MODEL,
+        });
+        sendJSON(res, 200, result);
+      } catch (e) {
+        console.error('[AI] 분석 오류:', e.message);
+        sendJSON(res, e.statusCode || 500, { error: e.message || '분석 실패' });
+      }
       return;
     }
 

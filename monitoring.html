@@ -98,6 +98,24 @@
     .tab-btn { border-bottom: 2px solid transparent; }
     .tab-btn.active { border-bottom-color: #001e40; color: #001e40; font-weight: 600; }
 
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-8px); }
+      40%,80% { transform: translateX(8px); }
+    }
+    .shake { animation: shake 0.4s; }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(40px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes toast-out {
+      from { opacity: 1; transform: translateX(0); }
+      to   { opacity: 0; transform: translateX(40px); }
+    }
+    .toast { animation: toast-in 0.3s ease; pointer-events: auto; }
+    .toast.out { animation: toast-out 0.3s ease forwards; }
+
     .server-indicator {
       width: 8px; height: 8px; border-radius: 50%; display: inline-block;
     }
@@ -112,12 +130,62 @@
   <input type="file" id="dev-file-input" accept=".xlsx,.xls">
 
   <!-- ══════════════════════════════════════════════════
+       로그인 화면 (첫 진입 시 암호 입력)
+  ══════════════════════════════════════════════════ -->
+  <div id="login-screen"
+       class="fixed inset-0 z-[10000] flex items-center justify-center"
+       style="background:linear-gradient(135deg,#001e40 0%,#003366 60%,#0a4a8f 100%);">
+    <div id="login-card"
+         class="bg-white rounded-2xl overlay-shadow w-[400px] max-w-[90vw] p-8 flex flex-col items-center">
+      <img src="logo_transparent.png"
+           alt="로고" class="h-14 w-auto object-contain mb-4">
+      <h1 class="font-bold text-lg text-primary text-center">한국지역난방공사</h1>
+      <p class="text-sm text-on-surface-variant text-center mt-1 mb-6">
+        열수송관 IoT 온도센서 이상감지 모니터링
+      </p>
+
+      <div class="w-full">
+        <label class="block text-sm font-medium text-on-surface-variant mb-1.5">암호</label>
+        <div class="relative border border-outline-variant rounded-lg bg-surface overflow-hidden focus-within:border-secondary focus-within:ring-1 focus-within:ring-secondary">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline" style="font-size:18px">lock</span>
+          <input id="login-password" type="password" autocomplete="current-password"
+                 placeholder="암호를 입력하세요"
+                 class="w-full bg-transparent border-none focus:ring-0 text-on-surface py-2.5 pl-10 pr-10 text-sm">
+          <button id="login-toggle" type="button"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface p-1">
+            <span class="material-symbols-outlined" style="font-size:18px">visibility</span>
+          </button>
+        </div>
+        <p id="login-error" class="text-sm text-status-critical mt-2 h-5 hidden flex items-center gap-1">
+          <span class="material-symbols-outlined" style="font-size:15px">error</span>
+          암호가 올바르지 않습니다.
+        </p>
+      </div>
+
+      <button id="login-submit"
+              class="w-full mt-4 py-2.5 bg-primary text-white font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined" style="font-size:18px">login</span>
+        접속
+      </button>
+
+      <p class="text-xs text-outline text-center mt-6">
+        © 2024 한국지역난방공사 · 인가된 사용자 전용
+      </p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
+       토스트 알림 (업로드 완료 등)
+  ══════════════════════════════════════════════════ -->
+  <div id="toast-container" class="fixed top-20 right-5 z-[9000] flex flex-col gap-2 items-end pointer-events-none"></div>
+
+  <!-- ══════════════════════════════════════════════════
        HEADER
   ══════════════════════════════════════════════════ -->
   <header style="background-color:#003366;" class="text-white z-50 flex justify-between items-center w-full px-4 h-16 shrink-0 shadow-md">
     <div class="flex items-center gap-5">
       <div class="flex items-center gap-3">
-        <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4p6PV-JocJIQsaPjimNjbSzK5_3swJDW5-npgF_HxzIdw83yW2Co21KAxgDjCrJcMvgT0NbNxMC9SNZs6DPIII1biPEldHggN8yK1wed9YWFlLR-kMgCm4_SZfWRI5d9jZIGYlDTOtecNTWOEbAdMaPNdkmfP3REo0jKeznuW0M8cbTCPLch-K9186f_BvxBh8F7SHa6sYH-50GOBG814S1lPUtsxCbuaz087nLX6_C_NRalNv-1a7TxnT0t3YrTnsFklo51KzEM"
+        <img src="logo_transparent.png"
              alt="로고" class="h-10 w-auto object-contain">
         <span class="font-bold text-lg">한국지역난방공사</span>
       </div>
@@ -141,6 +209,11 @@
               class="flex items-center gap-1.5 px-3 py-1.5 border border-white/40 rounded hover:bg-white/10 transition-colors">
         <span class="material-symbols-outlined" style="font-size:16px;line-height:1;">cloud_download</span>
         샘플 데이터
+      </button>
+      <button id="btn-ai"
+              class="flex items-center gap-1.5 px-3 py-1.5 border border-amber-300/70 rounded bg-amber-400/15 hover:bg-amber-400/25 transition-colors text-amber-100">
+        <span class="material-symbols-outlined" style="font-size:16px;line-height:1;">auto_awesome</span>
+        AI 분석
       </button>
       <button id="btn-upload"
               class="flex items-center gap-1.5 px-3 py-1.5 border border-white rounded bg-white/15 hover:bg-white/25 transition-colors">
@@ -355,6 +428,46 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════
+       AI 분석 모달
+  ══════════════════════════════════════════════════ -->
+  <div id="modal-ai" class="hidden fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-6">
+    <div class="bg-surface-container-lowest w-full max-w-3xl max-h-[88vh] rounded-xl overlay-shadow flex flex-col overflow-hidden">
+
+      <!-- 헤더 -->
+      <div style="background-color:#003366;" class="text-white flex items-center justify-between px-6 py-4 shrink-0">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-amber-300" style="font-size:24px">auto_awesome</span>
+          <div>
+            <h2 class="font-bold text-xl">AI 분석</h2>
+            <p class="text-white/70 text-xs mt-0.5">브리핑 · 급변 감지 · 점검 우선순위</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-ai-rerun"
+                  class="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-white/40 rounded hover:bg-white/10 transition-colors">
+            <span class="material-symbols-outlined" style="font-size:16px">refresh</span>
+            다시 분석
+          </button>
+          <button id="btn-close-ai" class="p-2 rounded-full hover:bg-white/10 transition-colors">
+            <span class="material-symbols-outlined text-2xl">close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 본문 -->
+      <div id="ai-body" class="flex-1 overflow-auto p-6 space-y-6">
+        <!-- runAiAnalysis()가 동적으로 채움 -->
+      </div>
+
+      <!-- 푸터 (고지) -->
+      <div class="px-6 py-2.5 border-t border-outline-variant/40 bg-surface-container-low/60 text-xs text-on-surface-variant flex items-center gap-1.5 shrink-0">
+        <span class="material-symbols-outlined text-amber-600" style="font-size:14px">info</span>
+        AI 분석을 위해 센서 <strong>요약 지표</strong>가 OpenAI로 전송됩니다(원시 측정 이력은 전송하지 않음). 결과는 참고용이며 최종 판단은 담당자가 합니다.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
        BODY
   ══════════════════════════════════════════════════ -->
   <div class="flex flex-1 overflow-hidden">
@@ -452,6 +565,38 @@
       <!-- Summary -->
       <section class="flex-1">
         <h2 class="font-semibold text-base text-on-surface mb-3">데이터 요약</h2>
+
+        <!-- 업로드 데이터 현황 (업로드 완료 확인용) -->
+        <div id="data-status" class="mb-4 rounded-lg p-3 border bg-surface-container-low border-outline-variant/30">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-semibold text-on-surface flex items-center gap-1.5">
+              <span class="material-symbols-outlined" style="font-size:16px">database</span>
+              온도 데이터 현황
+            </span>
+            <span id="data-status-badge" class="text-xs px-2 py-0.5 rounded font-medium bg-surface-container text-outline">
+              대기 중
+            </span>
+          </div>
+          <div class="text-sm space-y-1">
+            <div class="flex justify-between gap-2">
+              <span class="text-on-surface-variant shrink-0">측정 기간</span>
+              <span id="data-period" class="font-mono text-xs text-on-surface text-right">-</span>
+            </div>
+            <div class="flex justify-between gap-2">
+              <span class="text-on-surface-variant shrink-0">측정 레코드</span>
+              <span id="data-records" class="font-mono text-on-surface">0 건</span>
+            </div>
+            <div class="flex justify-between gap-2">
+              <span class="text-on-surface-variant shrink-0">데이터 출처</span>
+              <span id="data-source" class="text-xs text-on-surface text-right truncate" style="max-width:140px;" title="">-</span>
+            </div>
+            <div class="flex justify-between gap-2">
+              <span class="text-on-surface-variant shrink-0">업로드 시각</span>
+              <span id="data-uploaded-at" class="font-mono text-xs text-on-surface-variant">-</span>
+            </div>
+          </div>
+        </div>
+
         <div class="space-y-1 text-sm">
           <div class="flex justify-between items-center py-1">
             <span class="text-on-surface-variant">전체 센서 수</span>
@@ -644,6 +789,11 @@ const state = {
   deviceDBByEntity: {},   // { EntityID: device }
   deviceDBLoaded:   false,
   unmatchedCount:   0,    // 등록 DB와 매칭 안 된 센서 수
+  dataMinTime:      null, // 업로드 데이터의 최소 측정시각
+  dataMaxTime:      null, // 업로드 데이터의 최대 측정시각
+  dataRecords:      0,    // 총 측정 레코드 수
+  dataSource:       '',   // 업로드 파일명 (또는 '샘플 데이터')
+  uploadedAt:       null, // 업로드(처리) 완료 시각
   thresholdWarning: 40,
   thresholdDanger:  50,
   selectedSensorId: null,
@@ -861,6 +1011,7 @@ function processData(rows) {
   }
 
   let unmatched = 0;
+  let minTime = null, maxTime = null, totalRecords = 0;
   for (const s of Object.values(sensors)) {
     s.history.sort((a, b) => (a.time > b.time ? 1 : -1));
     const last = s.history[s.history.length - 1];
@@ -868,10 +1019,17 @@ function processData(rows) {
     s.latestTime = last.time;
     s.status = getStatus(s.latestTemp);
     if (!s.matched) unmatched++;
+    totalRecords += s.history.length;
+    const first = s.history[0].time;
+    if (first && (minTime === null || first < minTime)) minTime = first;
+    if (last.time && (maxTime === null || last.time > maxTime)) maxTime = last.time;
   }
 
-  state.sensors = sensors;
+  state.sensors        = sensors;
   state.unmatchedCount = unmatched;
+  state.dataMinTime    = minTime;
+  state.dataMaxTime    = maxTime;
+  state.dataRecords    = totalRecords;
 
   const total = Object.keys(sensors).length;
   if (total === 0) {
@@ -1232,14 +1390,82 @@ function parseXlsx(buf)  {
   return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
 }
 
+// ── 토스트 알림 ──────────────────────────────────────
+function showToast(title, lines = [], type = 'success') {
+  const palette = {
+    success: { bg:'#16a34a', icon:'check_circle' },
+    info:    { bg:'#115cb9', icon:'info' },
+    warning: { bg:'#eab308', icon:'warning' },
+    error:   { bg:'#dc2626', icon:'error' },
+  }[type] || { bg:'#16a34a', icon:'check_circle' };
+
+  const el = document.createElement('div');
+  el.className = 'toast overlay-shadow rounded-lg text-white px-4 py-3 max-w-xs flex items-start gap-2';
+  el.style.background = palette.bg;
+  el.innerHTML = `
+    <span class="material-symbols-outlined shrink-0" style="font-size:20px">${palette.icon}</span>
+    <div class="text-sm">
+      <div class="font-bold">${title}</div>
+      ${lines.map(l => `<div class="text-white/90 text-xs mt-0.5">${l}</div>`).join('')}
+    </div>`;
+  const container = document.getElementById('toast-container');
+  container.appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 300); }, 4500);
+}
+
+// ── 업로드 데이터 현황 UI 갱신 ──────────────────────────
+function updateDataInfo() {
+  const period   = (state.dataMinTime && state.dataMaxTime)
+    ? (state.dataMinTime === state.dataMaxTime ? state.dataMinTime : `${state.dataMinTime}\n~ ${state.dataMaxTime}`)
+    : '-';
+  document.getElementById('data-period').textContent      = period;
+  document.getElementById('data-records').textContent     = `${(state.dataRecords||0).toLocaleString()} 건`;
+  const srcEl = document.getElementById('data-source');
+  srcEl.textContent = state.dataSource || '-';
+  srcEl.title       = state.dataSource || '';
+  document.getElementById('data-uploaded-at').textContent =
+    state.uploadedAt ? state.uploadedAt : '-';
+
+  const badge = document.getElementById('data-status-badge');
+  const box   = document.getElementById('data-status');
+  if (state.uploadedAt) {
+    badge.textContent = '업로드 완료';
+    badge.className   = 'text-xs px-2 py-0.5 rounded font-medium bg-green-100 text-green-700';
+    box.className     = 'mb-4 rounded-lg p-3 border bg-green-50 border-green-200';
+  } else {
+    badge.textContent = '대기 중';
+    badge.className   = 'text-xs px-2 py-0.5 rounded font-medium bg-surface-container text-outline';
+    box.className     = 'mb-4 rounded-lg p-3 border bg-surface-container-low border-outline-variant/30';
+  }
+}
+
+// ── 데이터 처리 완료 후 공통 마무리 (현황 갱신 + 완료 토스트) ──
+function markDataLoaded(source) {
+  const now = new Date(), p = n => String(n).padStart(2,'0');
+  state.dataSource = source;
+  state.uploadedAt = `${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+  updateDataInfo();
+
+  const total   = Object.keys(state.sensors).length;
+  const period  = (state.dataMinTime && state.dataMaxTime)
+    ? `측정기간 ${state.dataMinTime} ~ ${state.dataMaxTime}` : '';
+  const lines = [
+    `센서 ${total}개 · 측정 ${(state.dataRecords||0).toLocaleString()}건`,
+    period,
+  ];
+  if (state.unmatchedCount > 0) lines.push(`⚠ 미매칭 ${state.unmatchedCount}개 (지도 제외)`);
+  showToast('업로드 완료 — 분석이 끝났습니다', lines.filter(Boolean), 'success');
+}
+
 function handleTempFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   const reader = new FileReader();
+  const done = ok => { if (ok) { refreshAll(); markDataLoaded(file.name); } };
   if (ext === 'csv' || ext === 'txt') {
-    reader.onload = e => { if (processData(parseCsv(e.target.result))) refreshAll(); };
+    reader.onload = e => done(processData(parseCsv(e.target.result)));
     reader.readAsText(file, 'UTF-8');
   } else if (ext === 'xlsx' || ext === 'xls') {
-    reader.onload = e => { if (processData(parseXlsx(e.target.result))) refreshAll(); };
+    reader.onload = e => done(processData(parseXlsx(e.target.result)));
     reader.readAsArrayBuffer(file);
   } else { alert('CSV 또는 XLSX 파일만 지원합니다.'); }
 }
@@ -1482,26 +1708,323 @@ function exportDevicesCSV() {
 }
 
 // ════════════════════════════════════════════════════
+// AI 분석 (브리핑 / 급변 감지 / 우선순위)
+// ════════════════════════════════════════════════════
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+function parseTimeMs(t) {
+  if (!t) return NaN;
+  const d = new Date(String(t).trim().replace(' ', 'T'));
+  return isNaN(d.getTime()) ? NaN : d.getTime();
+}
+
+const round1 = n => Math.round(n * 10) / 10;
+
+// 센서별 집계 지표 + 매칭 장비 정보로 압축한 분석용 요약본 생성
+// (원시 측정 이력은 전송하지 않음 — 프라이버시·비용 절감)
+function buildAnalysisPayload() {
+  const nowYear = new Date().getFullYear();
+  const sensors = Object.values(state.sensors).map(s => {
+    const h = s.history;
+    const first = h[0], last = h[h.length - 1];
+    const t0 = parseTimeMs(first.time), t1 = parseTimeMs(last.time);
+    const spanH = (!isNaN(t0) && !isNaN(t1) && t1 > t0) ? (t1 - t0) / 3.6e6 : 0;
+    const ratePerHour = spanH > 0 ? (last.temp - first.temp) / spanH : 0;
+
+    // 최근 구간 변화율 (마지막 두 측정값)
+    let recentRate = 0;
+    if (h.length >= 2) {
+      const p = h[h.length - 2];
+      const tp = parseTimeMs(p.time);
+      const dh = (!isNaN(tp) && !isNaN(t1) && t1 > tp) ? (t1 - tp) / 3.6e6 : 0;
+      recentRate = dh > 0 ? (last.temp - p.temp) / dh : 0;
+    }
+
+    const temps = h.map(x => x.temp);
+    const out = {
+      id: s.id,
+      name: s.name,
+      org: s.org || undefined,
+      status: s.status,
+      latestTemp: round1(s.latestTemp),
+      latestTime: s.latestTime,
+      firstTemp: round1(first.temp),
+      firstTime: first.time,
+      maxTemp: round1(Math.max(...temps)),
+      minTemp: round1(Math.min(...temps)),
+      count: h.length,
+      spanHours: round1(spanH),
+      deltaTotal: round1(last.temp - first.temp),
+      ratePerHour: round1(ratePerHour),
+      recentRatePerHour: round1(recentRate),
+    };
+
+    // 매칭된 장비 정보
+    const d = state.deviceDBMap[s.id];
+    if (d) {
+      const dev = {};
+      if (d.model)        dev.model = d.model;
+      if (d.facilityType) dev.facilityType = d.facilityType;
+      if (d.address)      dev.address = d.address;
+      const yr = parseInt(String(d.installedAt || '').slice(0, 4), 10);
+      if (!isNaN(yr) && yr > 1980 && yr <= nowYear) {
+        dev.installYear = yr;
+        dev.ageYears = nowYear - yr;
+      }
+      if (Object.keys(dev).length) out.device = dev;
+    }
+    return out;
+  });
+
+  const counts = {
+    total:   sensors.length,
+    danger:  sensors.filter(s => s.status === 'danger').length,
+    warning: sensors.filter(s => s.status === 'warning').length,
+    normal:  sensors.filter(s => s.status === 'normal').length,
+  };
+
+  return {
+    thresholds: { warning: state.thresholdWarning, danger: state.thresholdDanger },
+    period: { from: state.dataMinTime || null, to: state.dataMaxTime || null },
+    counts,
+    sensors,
+  };
+}
+
+function aiBodyEl() { return document.getElementById('ai-body'); }
+
+function renderAiLoading() {
+  aiBodyEl().innerHTML = `
+    <div class="flex flex-col items-center justify-center py-16 text-on-surface-variant">
+      <span class="material-symbols-outlined text-5xl text-secondary animate-spin" style="font-size:48px">progress_activity</span>
+      <p class="mt-4 font-medium">AI가 센서 데이터를 분석하고 있습니다…</p>
+      <p class="text-xs mt-1">잠시만 기다려 주세요 (보통 5~15초)</p>
+    </div>`;
+}
+
+function renderAiError(msg) {
+  aiBodyEl().innerHTML = `
+    <div class="flex flex-col items-center justify-center py-14 text-center">
+      <span class="material-symbols-outlined text-5xl text-status-critical" style="font-size:48px">error</span>
+      <p class="mt-4 font-semibold text-on-surface">분석을 완료하지 못했습니다</p>
+      <p class="text-sm text-on-surface-variant mt-2 max-w-md">${escapeHtml(msg)}</p>
+    </div>`;
+}
+
+function renderAiResult(data) {
+  const sevStyle = {
+    high:   { bg:'#fef2f2', bar:'#dc2626', label:'높음', txt:'#dc2626' },
+    medium: { bg:'#fffbeb', bar:'#eab308', label:'중간', txt:'#b45309' },
+    low:    { bg:'#f3f4f5', bar:'#9ca3af', label:'낮음', txt:'#6b7280' },
+  };
+  const levelBadge = {
+    '위험': 'background:#dc2626;color:#fff;',
+    '경고': 'background:#eab308;color:#1a1200;',
+    '주의': 'background:#115cb9;color:#fff;',
+  };
+
+  // ── 1. 브리핑 ──
+  const briefing = `
+    <section>
+      <h3 class="font-semibold text-base text-on-surface mb-2 flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-secondary" style="font-size:18px">summarize</span>
+        상황 브리핑
+      </h3>
+      <div class="bg-primary/5 border-l-4 border-primary rounded-r-lg p-4 text-sm leading-relaxed text-on-surface">
+        ${escapeHtml(data.briefing) || '브리핑을 생성하지 못했습니다.'}
+      </div>
+    </section>`;
+
+  // ── 2. 급변 감지 ──
+  const rc = data.rapidChanges || [];
+  const rapidBody = rc.length ? rc.map(r => {
+    const st = sevStyle[r.severity] || sevStyle.low;
+    const rate = typeof r.ratePerHour === 'number' ? r.ratePerHour.toFixed(1) : r.ratePerHour;
+    const sign = (typeof r.ratePerHour === 'number' && r.ratePerHour > 0) ? '+' : '';
+    return `<div class="rounded-lg p-3 flex items-start gap-3 cursor-pointer hover:brightness-95 transition"
+                 style="background:${st.bg};border-left:4px solid ${st.bar};"
+                 onclick="selectSensor('${escapeHtml(r.id)}'); closeAiModal();">
+      <span class="material-symbols-outlined shrink-0" style="font-size:20px;color:${st.bar}">trending_up</span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-mono font-bold text-sm">${escapeHtml(r.id)}</span>
+          <span class="text-xs text-on-surface-variant">${escapeHtml(r.name)}</span>
+          <span class="text-xs font-bold px-1.5 py-0.5 rounded" style="color:${st.txt};background:#fff;">상승률 ${sign}${rate}°C/h</span>
+          ${r.currentTemp != null ? `<span class="text-xs text-on-surface-variant font-mono">현재 ${escapeHtml(r.currentTemp)}°C</span>` : ''}
+        </div>
+        <p class="text-xs text-on-surface-variant mt-1">${escapeHtml(r.reason)}</p>
+      </div>
+    </div>`;
+  }).join('') : `<div class="text-sm text-on-surface-variant bg-status-normal/10 border border-status-normal/30 rounded-lg p-3 flex items-center gap-2">
+      <span class="material-symbols-outlined text-status-normal" style="font-size:18px">check_circle</span>
+      급격하게 상승 중인 센서가 감지되지 않았습니다.
+    </div>`;
+
+  const rapid = `
+    <section>
+      <h3 class="font-semibold text-base text-on-surface mb-2 flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-status-warning" style="font-size:18px">bolt</span>
+        급변 감지 <span class="text-xs font-normal text-on-surface-variant">(임계치 미만이어도 빠른 상승이면 포함)</span>
+      </h3>
+      <div class="space-y-2">${rapidBody}</div>
+    </section>`;
+
+  // ── 3. 우선순위 ──
+  const pr = data.priorities || [];
+  const prioBody = pr.length ? `
+    <div class="space-y-2">${pr.map(p => `
+      <div class="border border-outline-variant/40 rounded-lg p-3 flex items-start gap-3 cursor-pointer hover:bg-surface-container-low transition"
+           onclick="selectSensor('${escapeHtml(p.id)}'); closeAiModal();">
+        <div class="shrink-0 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm font-mono">${escapeHtml(p.rank)}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold text-sm">${escapeHtml(p.id)}</span>
+            <span class="text-xs text-on-surface-variant">${escapeHtml(p.name)}</span>
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full" style="${levelBadge[p.level] || levelBadge['주의']}">${escapeHtml(p.level)}</span>
+          </div>
+          <p class="text-sm text-on-surface mt-1 font-medium flex items-center gap-1">
+            <span class="material-symbols-outlined text-secondary" style="font-size:15px">build</span>${escapeHtml(p.action)}
+          </p>
+          <p class="text-xs text-on-surface-variant mt-0.5">${escapeHtml(p.reason)}</p>
+        </div>
+      </div>`).join('')}</div>` :
+    `<div class="text-sm text-on-surface-variant">조치가 필요한 센서가 없습니다.</div>`;
+
+  const prio = `
+    <section>
+      <h3 class="font-semibold text-base text-on-surface mb-2 flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-status-critical" style="font-size:18px">format_list_numbered</span>
+        점검 우선순위
+      </h3>
+      ${prioBody}
+    </section>`;
+
+  aiBodyEl().innerHTML = briefing + rapid + prio +
+    `<div class="text-right text-xs text-outline pt-1">모델: ${escapeHtml(data._model || '-')}</div>`;
+}
+
+function openAiModal()  { document.getElementById('modal-ai').classList.remove('hidden'); }
+function closeAiModal() { document.getElementById('modal-ai').classList.add('hidden'); }
+
+async function runAiAnalysis() {
+  openAiModal();
+
+  const payload = buildAnalysisPayload();
+  if (!payload.sensors.length) {
+    renderAiError('분석할 온도 데이터가 없습니다. 먼저 온도 데이터를 업로드하거나 샘플 데이터를 로드하세요.');
+    return;
+  }
+  if (!state.serverOnline) {
+    renderAiError('AI 분석은 서버 연결이 필요합니다. (API 키 보호를 위해 서버에서만 호출) 로컬에서는 "node server.js"로 서버를 실행한 뒤 http://localhost:3000 으로 접속하세요.');
+    return;
+  }
+
+  renderAiLoading();
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { renderAiError(data.error || `요청 실패 (${res.status})`); return; }
+    renderAiResult(data);
+  } catch (e) {
+    renderAiError('서버에 연결할 수 없습니다: ' + e.message);
+  }
+}
+
+// ════════════════════════════════════════════════════
 // 초기화
 // ════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', async () => {
+// ════════════════════════════════════════════════════
+// 로그인 (암호 게이트)
+// ════════════════════════════════════════════════════
+const APP_PASSWORD = 'kdhc';
+let appBooted = false;
+
+async function bootApp() {
+  if (appBooted) return;
+  appBooted = true;
   initMap();
   initChart();
+  await loadDevicesFromServer();          // 서버에서 장비 DB 로드
+  if (processData(parseCsv(SAMPLE_CSV))) { refreshAll(); markDataLoaded('샘플 데이터'); }  // 샘플 온도 데이터 자동 로드
+  // 로그인 오버레이로 가려진 동안 크기가 0이었을 수 있으므로 지도 크기 재계산
+  setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
+}
 
-  // 서버에서 장비 DB 로드
-  await loadDevicesFromServer();
+function setupLogin() {
+  const screen   = document.getElementById('login-screen');
+  const card     = document.getElementById('login-card');
+  const input    = document.getElementById('login-password');
+  const errorMsg = document.getElementById('login-error');
+  const submit   = document.getElementById('login-submit');
+  const toggle   = document.getElementById('login-toggle');
 
-  // 샘플 온도 데이터 자동 로드
-  if (processData(parseCsv(SAMPLE_CSV))) refreshAll();
+  // 이미 이번 세션에서 인증했다면 바로 통과
+  if (sessionStorage.getItem('authed') === '1') {
+    screen.remove();
+    bootApp();
+    return;
+  }
+
+  setTimeout(() => input.focus(), 100);
+
+  function tryLogin() {
+    if (input.value === APP_PASSWORD) {
+      sessionStorage.setItem('authed', '1');
+      screen.style.transition = 'opacity 0.3s';
+      screen.style.opacity = '0';
+      setTimeout(() => screen.remove(), 300);
+      bootApp();
+    } else {
+      errorMsg.classList.remove('hidden');
+      card.classList.remove('shake');
+      void card.offsetWidth;            // reflow → 애니메이션 재시작
+      card.classList.add('shake');
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  submit.addEventListener('click', tryLogin);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') tryLogin();
+    else errorMsg.classList.add('hidden');
+  });
+
+  // 암호 표시/숨김 토글
+  toggle.addEventListener('click', () => {
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    toggle.querySelector('span').textContent = show ? 'visibility_off' : 'visibility';
+    input.focus();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  setupLogin();
 
   // ── 버튼 이벤트 ──────────────────────────────────
   document.getElementById('btn-sample').addEventListener('click', () => {
-    if (processData(parseCsv(SAMPLE_CSV))) refreshAll();
+    if (processData(parseCsv(SAMPLE_CSV))) { refreshAll(); markDataLoaded('샘플 데이터'); }
   });
 
   document.getElementById('btn-upload').addEventListener('click', () =>
     document.getElementById('file-input').click()
   );
+
+  // ── AI 분석 모달 ────────────────────────────────
+  document.getElementById('btn-ai').addEventListener('click', runAiAnalysis);
+  document.getElementById('btn-ai-rerun').addEventListener('click', runAiAnalysis);
+  document.getElementById('btn-close-ai').addEventListener('click', closeAiModal);
+  document.getElementById('modal-ai').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeAiModal();
+  });
   document.getElementById('file-input').addEventListener('change', e => {
     if (e.target.files.length) handleTempFile(e.target.files[0]);
     e.target.value = '';
