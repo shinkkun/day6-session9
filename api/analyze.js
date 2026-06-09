@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
   try {
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const result = await runAnalysis(payload, {
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey: process.env.GPT_API_KEY || process.env.OPENAI_API_KEY,
       model: process.env.OPENAI_MODEL,
     });
     return res.status(200).json(result);

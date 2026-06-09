@@ -93,7 +93,7 @@ async function runAnalysis(payload, env) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(25000),   // Vercel 함수 제한(maxDuration 30s) 안에서 끝나도록
   });
 
   if (!resp.ok) {

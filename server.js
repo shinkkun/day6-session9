@@ -106,7 +106,7 @@ const server = http.createServer(async (req, res) => {
       try {
         const payload = JSON.parse(await readBody(req));
         const result = await runAnalysis(payload, {
-          apiKey: process.env.OPENAI_API_KEY,
+          apiKey: process.env.GPT_API_KEY || process.env.OPENAI_API_KEY,
           model:  process.env.OPENAI_MODEL,
         });
         sendJSON(res, 200, result);

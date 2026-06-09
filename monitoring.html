@@ -683,7 +683,7 @@
                     <th class="px-3 py-2 font-normal">센서 ID / 이름</th>
                     <th class="px-3 py-2 font-normal text-right">온도 (°C)</th>
                     <th class="px-3 py-2 font-normal text-right">측정 시각</th>
-                    <th class="px-3 py-2 font-normal text-center w-14">단계</th>
+                    <th class="px-2 py-2 font-normal text-center w-16 whitespace-nowrap">단계</th>
                   </tr>
                 </thead>
                 <tbody id="alert-tbody" class="text-on-surface divide-y divide-outline-variant/20">
@@ -866,6 +866,27 @@ function mapDevColumns(headers) {
 }
 
 // ════════════════════════════════════════════════════
+// 로컬 영속 저장 (localStorage) — 서버가 없어도 장비 DB 유지
+// ════════════════════════════════════════════════════
+const LS_DEVICES_KEY = 'kdhc_devices_db';
+
+function saveDevicesToLocal(db) {
+  try { localStorage.setItem(LS_DEVICES_KEY, JSON.stringify(db)); return true; }
+  catch (e) { console.warn('[로컬저장] 실패:', e.message); return false; }
+}
+function loadDevicesFromLocal() {
+  try {
+    const raw = localStorage.getItem(LS_DEVICES_KEY);
+    if (!raw) return null;
+    const db = JSON.parse(raw);
+    return (db && Array.isArray(db.devices)) ? db : null;
+  } catch { return null; }
+}
+function clearDevicesLocal() {
+  try { localStorage.removeItem(LS_DEVICES_KEY); } catch {}
+}
+
+// ════════════════════════════════════════════════════
 // 서버 API
 // ════════════════════════════════════════════════════
 async function checkServer() {
@@ -875,18 +896,51 @@ async function checkServer() {
   } catch { return false; }
 }
 
-async function loadDevicesFromServer() {
+// ── 하이브리드 로드: 서버 우선 → 없으면 localStorage 복구 ──
+async function loadDevices() {
+  const local = loadDevicesFromLocal();
+  let serverDB = null, online = false;
+
+  // 1) 서버 시도
   try {
     const res = await fetch('/api/devices', { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) throw new Error('API error');
-    const db = await res.json();
-    state.serverOnline = true;
-    applyDeviceDB(db);
-    updateServerStatus(true, db);
-  } catch {
-    state.serverOnline = false;
-    updateServerStatus(false, null);
+    if (res.ok) { serverDB = await res.json(); online = true; }
+  } catch { online = false; }
+  state.serverOnline = online;
+
+  const serverHas = serverDB && ((serverDB.devices || []).length > 0);
+  const localHas  = local && ((local.devices || []).length > 0);
+
+  let chosen, source;
+  if (online && serverHas) {
+    // 서버에 데이터 있음 → 서버 우선, 로컬도 최신화
+    chosen = serverDB; source = 'server';
+    saveDevicesToLocal(serverDB);
+  } else if (localHas) {
+    // 서버가 비었거나 꺼짐 + 로컬에 데이터 있음 → 로컬에서 복구
+    chosen = local; source = 'local';
+    if (online) {                       // 서버가 비어있으면 로컬 데이터를 서버로 복원
+      try { await saveDevicesToServer(local.devices); source = 'local→server'; } catch {}
+    }
+  } else {
+    chosen = serverDB || local || { devices: [], importedAt: null, count: 0 };
+    source = 'empty';
   }
+
+  applyDeviceDB(chosen);
+  updateServerStatus(online, chosen);
+  console.log(`[장비DB] 로드 완료 — 출처:${source}, 서버:${online?'연결':'미연결'}, ${(chosen.devices||[]).length}개`);
+}
+
+// ── 하이브리드 저장: 항상 로컬 저장 + 서버 연결 시 서버에도 저장 ──
+async function persistDevices(devices) {
+  const db = { devices, importedAt: new Date().toISOString(), count: devices.length };
+  const localOk = saveDevicesToLocal(db);
+  let serverOk = false;
+  if (state.serverOnline) {
+    try { await saveDevicesToServer(devices); serverOk = true; } catch {}
+  }
+  return { db, localOk, serverOk };
 }
 
 async function saveDevicesToServer(devices) {
@@ -1149,8 +1203,8 @@ function updateAlertList() {
   tbody.innerHTML = alerts.map((s, i) => {
     const isDanger = s.status === 'danger';
     const bdg = isDanger
-      ? `<span style="background:#dc2626;color:white;" class="px-2 py-0.5 rounded text-xs font-bold">위험</span>`
-      : `<span style="background:#eab308;color:#1a1200;" class="px-2 py-0.5 rounded text-xs font-bold">경고</span>`;
+      ? `<span style="background:#dc2626;color:white;white-space:nowrap;" class="inline-block px-2 py-0.5 rounded text-xs font-bold">위험</span>`
+      : `<span style="background:#eab308;color:#1a1200;white-space:nowrap;" class="inline-block px-2 py-0.5 rounded text-xs font-bold">경고</span>`;
     const tc  = isDanger ? 'color:#dc2626;font-weight:700;' : 'color:#b45309;font-weight:700;';
     const row = isDanger ? 'background-color:#fef2f2;' : '';
     const sel = s.id === state.selectedSensorId ? 'outline:2px solid #003366;outline-offset:-2px;' : '';
@@ -1161,7 +1215,7 @@ function updateAlertList() {
       </td>
       <td class="px-3 py-2 text-right text-sm font-mono" style="${tc}">${s.latestTemp.toFixed(1)}</td>
       <td class="px-3 py-2 text-right text-xs text-on-surface-variant font-mono">${s.latestTime}</td>
-      <td class="px-3 py-2 text-center">${bdg}</td>
+      <td class="px-2 py-2 text-center whitespace-nowrap">${bdg}</td>
     </tr>`;
   }).join('');
 }
@@ -1674,12 +1728,10 @@ async function doImport() {
   status.textContent = `저장 중... (${pendingDevices.length.toLocaleString()}개)`;
 
   try {
-    if (state.serverOnline) {
-      const result = await saveDevicesToServer(pendingDevices);
-      status.textContent = `✅ ${result.count.toLocaleString()}개 장비가 DB에 저장되었습니다.`;
-    } else {
-      status.textContent = '⚠️ 서버 미연결 — 이 세션에서만 임시 적용됩니다.';
-    }
+    const { serverOk } = await persistDevices(pendingDevices);
+    status.textContent = serverOk
+      ? `✅ ${pendingDevices.length.toLocaleString()}개 장비가 서버 DB와 브라우저에 저장되었습니다.`
+      : `✅ ${pendingDevices.length.toLocaleString()}개 장비가 브라우저에 저장되었습니다. 다음에 열어도 유지됩니다. (서버 미연결)`;
     applyDeviceDB({ devices: pendingDevices, importedAt: new Date().toISOString(), count: pendingDevices.length });
     pendingDevices = null;
     refreshDeviceModal();
@@ -1951,7 +2003,7 @@ async function bootApp() {
   appBooted = true;
   initMap();
   initChart();
-  await loadDevicesFromServer();          // 서버에서 장비 DB 로드
+  await loadDevices();                    // 장비 DB 로드 (서버 + localStorage 하이브리드)
   if (processData(parseCsv(SAMPLE_CSV))) { refreshAll(); markDataLoaded('샘플 데이터'); }  // 샘플 온도 데이터 자동 로드
   // 로그인 오버레이로 가려진 동안 크기가 0이었을 수 있으므로 지도 크기 재계산
   setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
@@ -2102,7 +2154,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-clear-db').addEventListener('click', async () => {
     if (!confirm('장비 DB를 초기화합니다. 계속하시겠습니까?')) return;
     try {
-      if (state.serverOnline) await clearDevicesOnServer();
+      clearDevicesLocal();                                   // 브라우저 저장 삭제
+      if (state.serverOnline) await clearDevicesOnServer();  // 서버 DB 삭제
       applyDeviceDB({ devices: [], importedAt: null, count: 0 });
       refreshDeviceModal();
     } catch (e) { alert('초기화 실패: ' + e.message); }
